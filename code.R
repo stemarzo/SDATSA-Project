@@ -19,7 +19,7 @@ statsNA(y)
 y_imp <- na_kalman(y)
 
 ## SPLIT TRAIN E TEST SET
-
+par(mfrow=c(1,1))
 train_date <- nrow(y_imp) *0.8
 y_train <- y_imp[1:train_date,]
 y_test <- y_imp[-c(1:train_date),]
@@ -35,8 +35,8 @@ plot(y_train_lambda)
 seasonplot(ts(y_train_lambda, frequency = 24))
 
 y_train_stag <- diff(y_train_lambda, 24)
-y_train_stag <- diff(y_train_stag)
-plot(y_train_stag[24:124])
+#y_train_stag <- diff(y_train_stag)
+plot(y_train_stag)
 
 seasonplot(ts(y_train_stag, frequency = 24))
 par(mfrow=c(1,2))
@@ -44,13 +44,17 @@ Acf(y_train_stag, 72)
 Pacf(y_train_stag, 72)
 
 
-mod1 <- Arima(y_imp, c(0, 1, 2), c(1, 1, 0),
-              lambda = lambda_boxcox)
+
+y_train
+
+mod1 <- Arima(y_train, c(1, 0, 1), c(3, 1, 1),
+              lambda = lambda_boxcox,  method="CSS")
 summary(mod1)
 
 Acf(mod1$residuals, 72)
 Pacf(mod1$residuals, 72)
 
+auto.arima(y_train, max.p = 3, max.q = 3, max.D = 1, max.d = 1, max.P = 3, max.Q = 3, seasonal = TRUE)
 
 fcst1 <- forecast(mod1, 1700)
 plot(fcst1)
