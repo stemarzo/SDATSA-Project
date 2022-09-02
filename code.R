@@ -1,7 +1,12 @@
+# PREPARAZIONE --------
+## LIBRERIE -------------------
 library(readr)
 library(xts)
 library(imputeTS) #per vedere info sui missing values
 library(forecast)
+library(KFAS)
+
+## CARICAMENTO ----------------
 
 dataset <- read_csv("Project_data_2021_2022 (TRAINSET).csv", col_types = cols(Date = col_character()))
 
@@ -11,14 +16,15 @@ y <- xts(x=data, order.by=dates)
 attr(y, 'frequency') <- 24
 plot(y)
 
-## INFORMAZIONI MISSING VALUES
+# INFORMAZIONI MISSING VALUES ----
 
 ggplot_na_distribution(y)
 ggplot_na_intervals(tsNH4)
 statsNA(y)
 y_imp <- na_kalman(y)
 
-## SPLIT TRAIN E TEST SET
+# SPLIT TRAIN E TEST SET --------
+
 par(mfrow=c(1,1))
 train_date <- nrow(y_imp) *0.8
 y_train <- y_imp[1:train_date,]
@@ -31,12 +37,13 @@ write.csv(y_test, file = "y_test.csv", row.names = FALSE)
 seasonplot(ts(y_train, frequency = 24))
 seasonplot(ts(y_train, frequency = 168))
 
-## RENDO STAZIONARIA IN VARIANZA
+# STAZIONARIETA
+## STAZIONARIETA IN VARIANZA ------
 y_train_lambda <- BoxCox(y_train, "auto")
 lambda_boxcox <- attributes(y_train_lambda)$lambda
 plot(y_train_lambda)
 
-##RENDO STAZIONARIO IN MEDIA
+## STAZIONARIETA IN MEDIA ---------
 
 seasonplot(ts(y_train_lambda, frequency = 24))
 seasonplot(ts(y_train_lambda, frequency = 168))
@@ -51,10 +58,9 @@ Acf(y_train_stag, 72)
 Pacf(y_train_stag, 72)
 
 
-#---- MODELLI ARIMA
-
-mod1 <- Arima(y_train, c(2, 1, 1), c(2, 1, 1),
-              lambda = lambda_boxcox, method="CSS")
+# MODELLI ARIMA ----
+## ARIMA DUMMY ---------
+#COMPLETARE CON I PASSI PER ARRIVARE A QUELLO FINALE
 
 mod1 <- Arima(y_train, c(1, 0, 1), c(3, 1, 1),
               lambda = lambda_boxcox, method="CSS")
@@ -70,7 +76,7 @@ mean(abs((y_test - as.numeric(fcst1$mean))/y_test)) * 100
 
 
 
-## Arima sinusoidi
+## ARIMA SINUSOIDI -----------
 
 omega <- outer(1:length(y), 1:84) * 2 * pi / 168
 cc <- cos(omega)
@@ -95,9 +101,9 @@ plot(fcst2, 0)
 mean(abs((y_test - as.numeric(fcst2$mean))/y_test)) * 100
 
 
-# UCM
+# UCM MODELS ------
 
-library(KFAS)
+## PRIMO MODELLO -----------
 
 y_train = ts(y_train, frequency = 24)
 
@@ -149,6 +155,9 @@ lines(y_test, col=2)
 
 mean(abs((y_test - as.numeric(pred))/y_test)) * 100
 smo$alphahat[6820,'slope']
+
+
+## SECONDO MODELLO --------------------
 
 time = 1:length(y_train)
 time2 = time*time
@@ -209,34 +218,6 @@ newdata = SSModel(y.new ~ -1 + SSMcustom(Z = mZ, T = mT, R = mR, Q = mQ,
                                          state_names = statename), H = mH)
 
 pred = ts(predict(fit$model, newdata = newdata),frequency = 24)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-pred = ts(predict(fit$model, n.ahead = 1706), frequency = 24 )
 plot(pred, type ="l")
 y_test = ts(y_test, frequency = 24)
 lines(y_test, col=2)
@@ -244,17 +225,10 @@ lines(y_test, col=2)
 mean(abs((y_test - as.numeric(pred))/y_test)) * 100
 
 
-
-
-
-
-
-
-
-smo$alphahat
+## TERZO MODELLO ---------
 
 model = SSModel(ts(y_train, frequency = 24) ~ SSMcycle(period = 8760, Q = NA) +
-                  SSMseasonal(168, sea.type = "dummy", Q = NA, P1inf = diag(167)), 
+                  SSMseasonal(24, sea.type = "dummy", Q = NA, P1inf = diag(23)), 
                 H= NA)
 model$Q
 
@@ -290,19 +264,15 @@ mean(abs((y_test - as.numeric(pred))/y_test)) * 100
 
 
 
-
-
-
-
-
-
+## QUARTO MODELLO -----------------------
 
 time = 1:length(y_train)
 
 model = SSModel(ts(y_train, frequency = 24) ~ SSMregression( ~ time) +
                   SSMcycle(period = 8760, Q = NA) +
-                  SSMseasonal(24, sea.type = "dummy", Q = NA, P1inf = diag(23)), 
+                  SSMseasonal(24, sea.type = "dummy", Q = NA, P1inf = diag(23)),
                 H= NA)
+model$Q
 
 updt_cycle = function(pars, model){
   model$Q[1,1,1] = model$Q[2,2,1]= exp(pars[1])#ciclo
@@ -360,6 +330,53 @@ pred = ts(predict(fit$model, newdata = newdata),frequency = 24)
 
 
 plot(pred, type ="l", ylim= c(800,2000))
+y_test = ts(y_test, frequency = 24)
+lines(y_test, col=2)
+
+mean(abs((y_test - as.numeric(pred))/y_test)) * 100
+model$Z
+
+
+## SESTO MODELLO -----------------------
+
+a1_in = c(y_train[1],diff(y_train)[1])
+model = SSModel(ts(y_train, frequency = 24) ~
+                  SSMtrend(2,Q = list(0,NA)) +
+                  SSMcycle(period = 8760, Q = NA, P1inf = matrix(0,2,2)) +
+                  SSMcycle(period = 8760/16, Q = NA, state_names = c("ciclo2", "ciclo2*"),P1inf = matrix(0,2,2)) +
+                  SSMseasonal(24, sea.type = "dummy", Q = NA, P1inf = diag(23)), 
+                H= NA)
+model$Q
+
+model$H
+
+updt_cycle = function(pars, model){
+  model$Q[2,2,1]= exp(pars[1])#slope
+  model$Q[4,4,1] = model$Q[5,5,1]= exp(pars[3])#ciclo
+  model$Q[6,6,1] = model$Q[7,7,1]= exp(pars[4])
+  model$Q[3,3,1]= exp(pars[2])#stag
+  model$H[1,1,1]= exp(pars[5])#errore di y
+  model
+}
+
+init_cycle = c(log(vy/10000),log(vy/10000),log(vy/10000),log(vy/10000),log(vy/10000))
+
+fit = fitSSM(model, init_cycle, updatefn = updt_cycle, method="BFGS")
+fit$optim.out$convergence #se è zero la stima ha raggiunto convergenza
+smo = KFS(fit$model, filtering = "state", smoothing = "state")
+
+dim(smo$alphahat)
+colnames(smo$alphahat)
+level = smo$alphahat[,"level"] + smo$alphahat[,"cycle"]+ smo$alphahat[,"ciclo2"]
+plot(level, ylim=c(800,2000))
+
+seas = smo$alphahat[, 3]
+plot(seas[1:168], type = "l")
+
+plot(level[1:336]+seas[1:336], type = 'l')
+lines(as.numeric(y_train[1:336]),col = 2)
+pred = ts(predict(fit$model, n.ahead = 1706), frequency = 24 )
+plot(pred, type ="l", ylim=c(800,1800))
 y_test = ts(y_test, frequency = 24)
 lines(y_test, col=2)
 
