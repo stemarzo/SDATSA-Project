@@ -12,6 +12,7 @@ dataset <- read_csv("Project_data_2021_2022 (TRAINSET).csv", col_types = cols(Da
 
 data <- dataset$CO
 dates <- seq(as.POSIXct("2004-03-10 18:00:00"), as.POSIXct("2005-02-28 23:00:00"), by="hour")
+
 y <- xts(x=data, order.by=dates)
 attr(y, 'frequency') <- 24
 plot(y)
@@ -31,11 +32,11 @@ y_train <- y_imp[1:train_date,]
 y_test <- ts(y_imp[-c(1:train_date),], frequency = 24)
 plot(log(y_train))
 
-write.csv(y_train, file = "y_train.csv", row.names = FALSE)
-write.csv(y_test, file = "y_test.csv", row.names = FALSE)
-
 seasonplot(ts(y_train, frequency = 24))
 seasonplot(ts(y_train, frequency = 168))
+
+write.csv(y_train, file = "y_train.csv", row.names = FALSE)
+write.csv(y_test, file = "y_test.csv", row.names = FALSE)
 
 # STAZIONARIETA
 ## STAZIONARIETA IN VARIANZA ------
@@ -49,10 +50,13 @@ seasonplot(ts(y_train_lambda, frequency = 24))
 seasonplot(ts(y_train_lambda, frequency = 168))
 
 y_train_stag <- diff(y_train_lambda, 24)
+
 #y_train_stag <- diff(y_train_stag)
+
 plot(y_train_stag)
 
 seasonplot(ts(y_train_stag, frequency = 24))
+
 par(mfrow=c(1,2))
 Acf(y_train_stag, 72)
 Pacf(y_train_stag, 72)
@@ -60,12 +64,30 @@ Pacf(y_train_stag, 72)
 
 # MODELLI ARIMA ----
 ## ARIMA DUMMY ---------
-#COMPLETARE CON I PASSI PER ARRIVARE A QUELLO FINALE
+
+mod1 <- Arima(y_train, c(0, 0, 0), c(0, 1, 0),
+              lambda = lambda_boxcox, method="CSS")
+summary(mod1)
+
+par(mfrow=c(1,2))
+Acf(mod1$residuals, 72)
+Pacf(mod1$residuals, 72)
+
+
+mod1 <- Arima(y_train, c(1, 0, 0), c(3, 1, 0),
+              lambda = lambda_boxcox, method="CSS")
+summary(mod1)
+
+par(mfrow=c(1,2))
+Acf(mod1$residuals, 72)
+Pacf(mod1$residuals, 72)
+
 
 mod1 <- Arima(y_train, c(1, 0, 1), c(3, 1, 1),
               lambda = lambda_boxcox, method="CSS")
 summary(mod1)
 
+par(mfrow=c(1,2))
 Acf(mod1$residuals, 72)
 Pacf(mod1$residuals, 72)
 
@@ -98,19 +120,20 @@ par(mfrow=c(1,1))
 fcst2 <- forecast(mod2, h=length(y_test), xreg = cbind(cc, ss)[(length(y_train)+1):length(y), ] )
 plot(fcst2)
 plot(fcst2, 0)
+
 mean(abs((y_test - as.numeric(fcst2$mean))/y_test)) * 100
 
 
 # UCM MODELS ------
 
-## PRIMO MODELLO -----------
-
 y_train = ts(y_train, frequency = 24)
 
+## PRIMO MODELLO -----------
+
 a1_in = c(y_train[1],0)
-model = SSModel(y_train ~ SSMtrend(2,Q = list(0,NA), a1 = a1_in) +
+model = SSModel(y_train ~ SSMtrend(2,Q = list(NA,NA), a1 = a1_in) +
                   SSMseasonal(24, sea.type = "dummy", Q = NA, P1inf = diag(23)), 
-                              H= NA)
+                H= NA)
 updt = function(pars, model){
   model$Q[1,1,1]= exp(pars[1])#varianza level
   model$Q[2,2,1]= exp(pars[2])#slope
@@ -119,20 +142,12 @@ updt = function(pars, model){
   model
 }
 
-updt_irw = function(pars, model){
-  model$Q[2,2,1]= exp(pars[1])#slope
-  model$Q[3,3,1]= exp(pars[2])#stag
-  model$H[1,1,1]= exp(pars[3])#errore di y
-  model
-}
-
 
 vy = var(diff(y_train)) 
 init = rep(log(vy/100), 4)
 init_irw = c(log(vy/10000), log(vy/100),log(vy/100))
 
-# fit = fitSSM(model, init, updatefn = updt, method="BFGS")
-fit = fitSSM(model, init_irw, updatefn = updt_irw, method="BFGS")
+fit = fitSSM(model, init, updatefn = updt, method="BFGS")
 
 fit$optim.out$convergence #se è zero la stima ha raggiunto convergenza
 
@@ -157,12 +172,57 @@ mean(abs((y_test - as.numeric(pred))/y_test)) * 100
 smo$alphahat[6820,'slope']
 
 
-## SECONDO MODELLO --------------------
+## SECONDO MODELLO -----------
+
+a1_in = c(y_train[1],0)
+model = SSModel(y_train ~ SSMtrend(2,Q = list(0,NA), a1 = a1_in) +
+                  SSMseasonal(24, sea.type = "dummy", Q = NA, P1inf = diag(23)), 
+                H= NA)
+
+
+updt_irw = function(pars, model){
+  model$Q[2,2,1]= exp(pars[1])#slope
+  model$Q[3,3,1]= exp(pars[2])#stag
+  model$H[1,1,1]= exp(pars[3])#errore di y
+  model
+}
+
+
+vy = var(diff(y_train)) 
+init_irw = c(log(vy/10000), log(vy/100),log(vy/100))
+
+fit = fitSSM(model, init_irw, updatefn = updt_irw, method="BFGS")
+
+fit$optim.out$convergence 
+
+smo = KFS(fit$model, filtering = "state", smoothing = "state")
+
+smo$alphahat
+
+dim(smo$alphahat)
+colnames(smo$alphahat)
+level = smo$alphahat[,"level"]
+plot(level)
+
+seas = smo$alphahat[, 3]
+plot(seas[1:168], type = "l")
+
+pred = ts(predict(fit$model, n.ahead = 1706), frequency = 24)
+plot(pred, type ="l")
+y_test = ts(y_test, frequency = 24)
+lines(y_test, col=2)
+
+mean(abs((y_test - as.numeric(pred))/y_test)) * 100
+smo$alphahat[6820,'slope']
+
+
+
+## TERZO MODELLO --------------------
 
 time = 1:length(y_train)
 time2 = time*time
 
-model = SSModel(ts(y_train, frequency = 24) ~ SSMregression( ~ time) +
+model = SSModel(y_train ~ SSMregression( ~ time) +
                   SSMseasonal(24, sea.type = "dummy", Q = NA, P1inf = diag(23)), 
                 H= NA)
 
@@ -225,9 +285,9 @@ lines(y_test, col=2)
 mean(abs((y_test - as.numeric(pred))/y_test)) * 100
 
 
-## TERZO MODELLO ---------
+## QUARTO MODELLO ---------
 
-model = SSModel(ts(y_train, frequency = 24) ~ SSMcycle(period = 8760, Q = NA) +
+model = SSModel(y_traiN ~ SSMcycle(period = 8760, Q = NA) +
                   SSMseasonal(24, sea.type = "dummy", Q = NA, P1inf = diag(23)), 
                 H= NA)
 model$Q
@@ -264,7 +324,7 @@ mean(abs((y_test - as.numeric(pred))/y_test)) * 100
 
 
 
-## QUARTO MODELLO -----------------------
+## QUINTO MODELLO -----------------------
 
 time = 1:length(y_train)
 
@@ -284,34 +344,31 @@ updt_cycle = function(pars, model){
 init_cycle = c(log(vy/10),log(vy/10),log(vy/10))
 
 fit = fitSSM(model, init_cycle, updatefn = updt_cycle, method="BFGS")
-
-fit$optim.out$convergence #se è zero la stima ha raggiunto convergenza
+fit$optim.out$convergence 
 
 smo = KFS(fit$model, filtering = "state", smoothing = "state")
-
 smo$alphahat
 
 dim(smo$alphahat)
 colnames(smo$alphahat)
+
 level = smo$alphahat[,"(Intercept)"] + smo$alphahat[,"time"]*time +smo$alphahat[,"cycle"]
 plot(level, ylim=c(800,2000))
 
 seas = smo$alphahat[, 3]
 plot(seas[1:168], type = "l")
-
 plot(level[1:336]+seas[1:336], type = 'l')
+
+# PREDIZIONI
 
 time.test = (8526-1705):8526
 time.test[1]
 y.new = y_test
 y.new[1:nrow(y.new),1:ncol(y.new)] = NA
 y.new = ts(y.new, frequency = 24)
-# mZ deve essere un array 1x26x1706
-# i primi 10 valori sulla diagonale devono essere il prezzo della benzina e l'ind_fid_cons (alternati)
 mZ = array(data = fit$model$Z[,,1:1706], dim = c(1,27,1706))
 head(fit$model$Z)
 mZ[1,2,1:1706] = time.test
-#mZ[1,3,1:1706] = time.test^2
 mT = fit$model$T
 mR = fit$model$R
 mQ = fit$model$Q
