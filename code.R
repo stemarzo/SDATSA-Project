@@ -100,16 +100,16 @@ mean(abs((y_test - as.numeric(fcst1$mean))/y_test)) * 100
 
 ## ARIMA SINUSOIDI -----------
 
-omega <- outer(1:length(y), 1:84) * 2 * pi / 168
+omega <- outer(1:length(y), 1:3) * 2 * pi / 168
 cc <- cos(omega)
-ss <- sin(omega[,-84])
+ss <- sin(omega)
 
 
 
 mod2 <- Arima(y_train, c(1, 0, 1),
               list(order = c(3, 1, 1), period = 24),
               include.drift = TRUE,
-              xreg = cbind(cc[,1:3], ss[, 1:3])[1:length(y_train), ])
+              xreg = cbind(cc, ss)[1:length(y_train), ])
 summary(mod2)
 
 par(mfrow=c(1,2))
@@ -123,6 +123,25 @@ plot(fcst2, 0)
 
 mean(abs((y_test - as.numeric(fcst2$mean))/y_test)) * 100
 
+## PREVISIONI ARIMA -----------
+
+modPrevArima <- Arima(y_imp, c(1, 0, 1), c(3, 1, 1),
+              lambda = lambda_boxcox, method="CSS")
+summary(modPrevArima)
+
+par(mfrow=c(1,2))
+Acf(modPrevArima$residuals, 72)
+Pacf(modPrevArima$residuals, 72)
+
+par(mfrow=c(1,1))
+fcstPrevArima <- forecast(modPrevArima, h=743)
+plot(fcstPrevArima)
+
+dates <- seq(as.POSIXct("2005-03-01 00:00:00"), as.POSIXct("2005-03-31 23:00:00"), by="hour")
+
+y <- xts(x=fcstPrevArima$mean, order.by=dates)
+attr(y, 'frequency') <- 24
+plot(y)
 
 # UCM MODELS ------
 
