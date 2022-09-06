@@ -139,6 +139,8 @@ plot(fcstPrevArima)
 
 dates <- seq(as.POSIXct("2005-03-01 00:00:00"), as.POSIXct("2005-03-31 23:00:00"), by="hour")
 
+length(dates)
+
 y <- xts(x=fcstPrevArima$mean, order.by=dates)
 attr(y, 'frequency') <- 24
 plot(y)
@@ -457,3 +459,81 @@ y_test = ts(y_test, frequency = 24)
 lines(y_test, col=2)
 
 mean(abs((y_test - as.numeric(pred))/y_test)) * 100
+
+## PREVISIONI UCM -------
+
+vy = var(y_imp)
+time = 1:length(y_imp)
+
+model = SSModel(ts(y_imp, frequency = 24) ~ SSMregression( ~ time) +
+                  SSMcycle(period = 8760, Q = NA) +
+                  SSMseasonal(24, sea.type = "dummy", Q = NA, P1inf = diag(23)),
+                H= NA)
+model$Q
+
+updt_cycle = function(pars, model){
+  model$Q[1,1,1] = model$Q[2,2,1]= exp(pars[1])#ciclo
+  model$Q[3,3,1]= exp(pars[2])#stag
+  model$H[1,1,1]= exp(pars[3])#errore di y
+  model
+}
+
+init_cycle = c(log(vy/10),log(vy/10),log(vy/10))
+
+fit = fitSSM(model, init_cycle, updatefn = updt_cycle, method="BFGS")
+fit$optim.out$convergence 
+
+smo = KFS(fit$model, filtering = "state", smoothing = "state")
+smo$alphahat
+
+dim(smo$alphahat)
+colnames(smo$alphahat)
+
+level = smo$alphahat[,"(Intercept)"] + smo$alphahat[,"time"]*time +smo$alphahat[,"cycle"]
+plot(level, ylim=c(800,2000))
+
+seas = smo$alphahat[, 3]
+plot(seas[1:168], type = "l")
+plot(level[1:336]+seas[1:336], type = 'l')
+
+# PREDIZIONI
+
+time.pred = 1:743
+
+y.new = y_test
+y.new[1:nrow(y.new),1:ncol(y.new)] = NA
+y.new = ts(y.new[1:743], frequency = 24)
+mZ = array(data = fit$model$Z[,,1:743], dim = c(1,27,743))
+head(fit$model$Z)
+mZ[1,2,1:743] = time.pred
+mT = fit$model$T
+mR = fit$model$R
+mQ = fit$model$Q
+va1 = fit$model$a1 
+mP1 = fit$model$P1
+mP1i = fit$model$P1inf
+mH = fit$model$H
+statename = row.names(fit$model$P1)
+
+
+newdata = SSModel(y.new ~ -1 + SSMcustom(Z = mZ, T = mT, R = mR, Q = mQ,
+                                         a1 = va1, P1 = mP1, P1inf = mP1i,
+                                         state_names = statename), H = mH)
+
+pred = ts(predict(fit$model, newdata = newdata),frequency = 24)
+
+
+plot(pred, type ="l", ylim= c(800,2000))
+
+dates <- seq(as.POSIXct("2005-03-01 00:00:00"), as.POSIXct("2005-03-31 23:00:00"), by="hour")
+
+
+
+y <- xts(x=pred, order.by=dates)
+attr(y, 'frequency') <- 24
+plot(y)
+
+
+#COMPORRE PREVISIONI
+
+
