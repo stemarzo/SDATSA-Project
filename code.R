@@ -5,7 +5,7 @@ library(xts)
 library(imputeTS) #per vedere info sui missing values
 library(forecast)
 library(KFAS)
-
+library(ggplot2)
 ## CARICAMENTO ----------------
 
 dataset <- read_csv("Project_data_2021_2022 (TRAINSET).csv", col_types = cols(Date = col_character()))
@@ -38,6 +38,22 @@ seasonplot(ts(y_train, frequency = 168))
 write.csv(y_train, file = "y_train.csv", row.names = FALSE)
 write.csv(y_test, file = "y_test.csv", row.names = FALSE)
 
+
+#ANALISI ESPLORATIVA
+print(
+  ggseasonplot(ts(y_train[6:1867], frequency = 24), year.labels=TRUE, year.labels.left=TRUE) +
+    ylab("CO") +
+    ggtitle("Seasonal plot giornaliero: rilevazione CO ")
+)
+
+print(
+  ggseasonplot(ts(y_train[6:(1680*2)], frequency = 168), year.labels=TRUE, year.labels.left=TRUE) +
+    ylab("CO") +
+    ggtitle("Seasonal plot settimanale: rilevazione CO ")
+)
+
+
+
 # STAZIONARIETA
 ## STAZIONARIETA IN VARIANZA ------
 y_train_lambda <- BoxCox(y_train, "auto")
@@ -50,6 +66,19 @@ seasonplot(ts(y_train_lambda, frequency = 24))
 seasonplot(ts(y_train_lambda, frequency = 168))
 
 y_train_stag <- diff(y_train_lambda, 24)
+
+print(
+  ggseasonplot(ts(y_train_stag[6:1867], frequency = 24), year.labels=TRUE, year.labels.left=TRUE) +
+    ylab("CO") +
+    ggtitle("Seasonal plot giornaliero: rilevazione CO ")
+)
+
+print(
+  ggseasonplot(ts(y_train_stag[1:1680], frequency = 168), year.labels=TRUE, year.labels.left=TRUE) +
+    ylab("CO") +
+    ggtitle("Seasonal plot settimanale: rilevazione CO ")
+)
+
 
 #y_train_stag <- diff(y_train_stag)
 
@@ -75,7 +104,7 @@ Pacf(mod1$residuals, 72)
 
 
 mod1 <- Arima(y_train, c(1, 0, 0), c(3, 1, 0),
-              lambda = lambda_boxcox, method="CSS")
+              lambda = lambda_boxcox)
 summary(mod1)
 
 par(mfrow=c(1,2))
@@ -84,8 +113,12 @@ Pacf(mod1$residuals, 72)
 
 
 mod1 <- Arima(y_train, c(1, 0, 1), c(3, 1, 1),
-              lambda = lambda_boxcox, method="CSS")
+              lambda = lambda_boxcox)
 summary(mod1)
+
+
+mod2 <- Arima(y_train, c(2,0,0), c(1,1,1))
+summary(mod2)
 
 par(mfrow=c(1,2))
 Acf(mod1$residuals, 72)
@@ -138,13 +171,21 @@ fcstPrevArima <- forecast(modPrevArima, h=743)
 plot(fcstPrevArima)
 
 dates <- seq(as.POSIXct("2005-03-01 00:00:00"), as.POSIXct("2005-03-31 23:00:00"), by="hour")
+dates_data <- seq(as.POSIXct("2004-03-10 18:00:00"), as.POSIXct("2005-02-28 23:00:00"), by="hour")
 
-length(dates)
+data_complete <- xts(x=c(data), order.by=dates_data)
 
-y <- xts(x=fcstPrevArima$mean, order.by=dates)
-attr(y, 'frequency') <- 24
-plot(y)
 
+
+
+arima_prev <- xts(x=c(fcstPrevArima$mean), order.by=dates)
+attr(arima_prev, 'frequency') <- 24
+
+
+prev_null = arima_prev
+prev_null[1:nrow(prev_null),1:ncol(prev_null)] = NA
+plot(xts(x=c(data_complete,prev_null)), main= "Previsioni ARIMA")
+lines(arima_prev, col="orange")
 # UCM MODELS ------
 
 y_train = ts(y_train, frequency = 24)
@@ -308,7 +349,7 @@ mean(abs((y_test - as.numeric(pred))/y_test)) * 100
 
 ## QUARTO MODELLO ---------
 
-model = SSModel(y_traiN ~ SSMcycle(period = 8760, Q = NA) +
+model = SSModel(y_train ~ SSMcycle(period = 8760, Q = NA) +
                   SSMseasonal(24, sea.type = "dummy", Q = NA, P1inf = diag(23)), 
                 H= NA)
 model$Q
@@ -362,6 +403,8 @@ updt_cycle = function(pars, model){
   model
 }
 
+vy = var(diff(y_train)[-1])
+
 init_cycle = c(log(vy/10),log(vy/10),log(vy/10))
 
 fit = fitSSM(model, init_cycle, updatefn = updt_cycle, method="BFGS")
@@ -407,9 +450,9 @@ newdata = SSModel(y.new ~ -1 + SSMcustom(Z = mZ, T = mT, R = mR, Q = mQ,
 pred = ts(predict(fit$model, newdata = newdata),frequency = 24)
 
 
-plot(pred, type ="l", ylim= c(800,2000))
+plot(y_test, type ="l")
 y_test = ts(y_test, frequency = 24)
-lines(y_test, col=2)
+lines(pred, col=2)
 
 mean(abs((y_test - as.numeric(pred))/y_test)) * 100
 model$Z
@@ -527,13 +570,31 @@ plot(pred, type ="l", ylim= c(800,2000))
 
 dates <- seq(as.POSIXct("2005-03-01 00:00:00"), as.POSIXct("2005-03-31 23:00:00"), by="hour")
 
+ucm_prev <- xts(x=pred[1:743], order.by=dates)
+attr(ucm_prev, 'frequency') <- 24
 
 
-y <- xts(x=pred, order.by=dates)
-attr(y, 'frequency') <- 24
-plot(y)
+prev_null = ucm_prev
+prev_null[1:nrow(prev_null),1:ncol(prev_null)] = NA
+plot(xts(x=c(data_complete,prev_null)), main= "Previsioni UCM")
+lines(ucm_prev, col="orange")
+
+plot(ucm_prev)
 
 
 #COMPORRE PREVISIONI
+prev_ml <- read_csv("prev_ml.csv")
+prev_ml <- xts(x=prev_ml_temp[1:743,"CO"], order.by=dates)
+
+final_prev <- merge(arima_prev, ucm_prev, prev_ml)
+colnames(final_prev) <- c("ARIMA", "UCM", "ML")
+
+final_prev = data.frame(date=index(final_prev), coredata(final_prev))
+
+
+
+final_prev = data.frame(as.Date(final_prev$date),strftime(final_prev$date, format="%H") ,final_prev$ARIMA, final_prev$UCM, final_prev$ML)
+colnames(final_prev) <- c("Date", "Hour", "ARIMA", "UCM", "ML")                      
+                      
 
 
