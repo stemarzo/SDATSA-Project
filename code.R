@@ -39,7 +39,7 @@ write.csv(y_train, file = "y_train.csv", row.names = FALSE)
 write.csv(y_test, file = "y_test.csv", row.names = FALSE)
 
 
-#ANALISI ESPLORATIVA
+# ANALISI ESPLORATIVA ------
 print(
   ggseasonplot(ts(y_train[6:1867], frequency = 24), year.labels=TRUE, year.labels.left=TRUE) +
     ylab("CO") +
@@ -582,7 +582,7 @@ lines(ucm_prev, col="orange")
 plot(ucm_prev)
 
 
-#COMPORRE PREVISIONI
+# COMPORRE PREVISIONI --------
 prev_ml <- read_csv("prev_ml.csv")
 prev_ml <- xts(x=prev_ml_temp[1:743,"CO"], order.by=dates)
 
@@ -590,8 +590,6 @@ final_prev <- merge(arima_prev, ucm_prev, prev_ml)
 colnames(final_prev) <- c("ARIMA", "UCM", "ML")
 
 final_prev = data.frame(date=index(final_prev), coredata(final_prev))
-
-
 
 final_prev = data.frame(as.Date(final_prev$date),strftime(final_prev$date, format="%H") ,final_prev$ARIMA, final_prev$UCM, final_prev$ML)
 colnames(final_prev) <- c("Date", "Hour", "ARIMA", "UCM", "ML")                      
