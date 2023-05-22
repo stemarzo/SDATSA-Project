@@ -26,9 +26,6 @@ I dati coprono il periodo da 2004-03-10 (hour=18) a 2005-02-28 (hour=23), e sono
   * ARIMA - previsione dei livelli di CO secondo l'algoritmo della famiglia ARIMA
   * UCM  - previsione dei livelli di CO secondo l'algoritmo della famiglia UCM
   * ML  - previsione dei livelli di CO secondo l'algoritmo della famiglia Machine Learning
-* I file delle previsioni devono essere denominati matricola_yyyymmdd.csv (ad esempio: 123456_20211201.csv).
-* Nello svolgere il progetto potrete utilizzare più algoritmi per ogni famiglia; dovrete quindi utilizzare processi di validazione per la selezione dei più promettenti, in modo da restringere la scelta ai "migliori" 3, uno per famiglia. I risultati degli altri modelli potranno essere riportati nella relazione finale e discussi durante l'esame.
-
 
 ***
 
