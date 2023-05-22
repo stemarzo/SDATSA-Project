@@ -8,7 +8,7 @@ library(KFAS)
 library(ggplot2)
 ## CARICAMENTO ----------------
 
-dataset <- read_csv("Project_data_2021_2022 (TRAINSET).csv", col_types = cols(Date = col_character()))
+dataset <- read_csv("./data/Project_data_2021_2022 (TRAINSET).csv", col_types = cols(Date = col_character()))
 
 data <- dataset$CO
 dates <- seq(as.POSIXct("2004-03-10 18:00:00"), as.POSIXct("2005-02-28 23:00:00"), by="hour")
@@ -35,8 +35,8 @@ plot(log(y_train))
 seasonplot(ts(y_train, frequency = 24))
 seasonplot(ts(y_train, frequency = 168))
 
-write.csv(y_train, file = "y_train.csv", row.names = FALSE)
-write.csv(y_test, file = "y_test.csv", row.names = FALSE)
+write.csv(y_train, file = "./data/y_train.csv", row.names = FALSE)
+write.csv(y_test, file = "./data/y_test.csv", row.names = FALSE)
 
 
 # ANALISI ESPLORATIVA ------
@@ -583,7 +583,7 @@ plot(ucm_prev)
 
 
 # COMPORRE PREVISIONI --------
-prev_ml <- read_csv("prev_ml.csv")
+prev_ml <- read_csv("./data/prev_ml.csv")
 prev_ml <- xts(x=prev_ml_temp[1:743,"CO"], order.by=dates)
 
 final_prev <- merge(arima_prev, ucm_prev, prev_ml)
